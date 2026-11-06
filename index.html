@@ -126,30 +126,21 @@
         {name: "Tamil", bat: 9, bowl: 8.5}
     ];
 
-    let roster = [];
+    let roster = [...defaultRoster];
     try {
-        let saved = localStorage.getItem('cric_roster_v2');
+        let saved = localStorage.getItem('cric_roster_v3');
         if (saved) {
             let parsed = JSON.parse(saved);
             if (Array.isArray(parsed) && parsed.length > 0) {
                 roster = parsed;
-            } else {
-                roster = [...defaultRoster];
             }
-        } else {
-            roster = [...defaultRoster];
         }
     } catch(e) {
         roster = [...defaultRoster];
     }
 
     function saveRoster() {
-        localStorage.setItem('cric_roster_v2', JSON.stringify(roster));
-    }
-
-    function init() {
-        renderCheckboxes(roster);
-        updateCount();
+        localStorage.setItem('cric_roster_v3', JSON.stringify(roster));
     }
 
     function renderCheckboxes(listToRender) {
@@ -186,12 +177,12 @@
     function toggleAdmin(e) {
         e.preventDefault();
         const login = document.getElementById('admin-login');
-        login.style.display = login.style.display === 'none' ? 'block' : 'none';
+        if (login) login.style.display = login.style.display === 'none' ? 'block' : 'none';
     }
 
     function verifyPin() {
-        const pin = document.getElementById('admin-pin').value;
-        if (pin === '5467') {
+        const pinInput = document.getElementById('admin-pin');
+        if (pinInput && pinInput.value === '5467') {
             document.getElementById('admin-login').style.display = 'none';
             document.getElementById('admin-settings').style.display = 'block';
             renderEditor();
@@ -221,16 +212,20 @@
     }
 
     function addPlayer() {
-        const name = document.getElementById('new-name').value.trim();
-        const bat = parseFloat(document.getElementById('new-bat').value) || 5;
-        const bowl = parseFloat(document.getElementById('new-bowl').value) || 5;
+        const nameInput = document.getElementById('new-name');
+        const batInput = document.getElementById('new-bat');
+        const bowlInput = document.getElementById('new-bowl');
+        const name = nameInput ? nameInput.value.trim() : '';
+        const bat = batInput ? parseFloat(batInput.value) || 5 : 5;
+        const bowl = bowlInput ? parseFloat(bowlInput.value) || 5 : 5;
         if(name) {
             roster.push({name, bat, bowl});
             saveRoster();
-            document.getElementById('new-name').value = '';
-            document.getElementById('new-bat').value = '';
-            document.getElementById('new-bowl').value = '';
-            init();
+            nameInput.value = '';
+            batInput.value = '';
+            bowlInput.value = '';
+            renderCheckboxes(roster);
+            updateCount();
             renderEditor();
         }
     }
@@ -238,7 +233,8 @@
     function removePlayer(index) {
         roster.splice(index, 1);
         saveRoster();
-        init();
+        renderCheckboxes(roster);
+        updateCount();
         renderEditor();
     }
 
@@ -266,7 +262,8 @@
 
         selectedPlayers.sort((a, b) => b.totalScore - a.totalScore);
 
-        const numTeams = parseInt(document.getElementById('num-teams').value) || 2;
+        const numTeamsInput = document.getElementById('num-teams');
+        const numTeams = numTeamsInput ? parseInt(numTeamsInput.value) || 2 : 2;
         let teams = Array.from({length: numTeams}, () => ({ players: [] }));
 
         let turn = 0;
@@ -304,7 +301,8 @@
                     <ul>${list}</ul>
                 </div>`;
         });
-        document.getElementById('results-section').style.display = 'block';
+        const resultsSection = document.getElementById('results-section');
+        if (resultsSection) resultsSection.style.display = 'block';
     }
 
     function shareTeams() {
@@ -315,7 +313,16 @@
         navigator.clipboard.writeText(text).then(() => alert('Teams copied to clipboard! Ready to paste into WhatsApp.'));
     }
 
-    document.addEventListener('DOMContentLoaded', init);
+    // Initialize immediately on script execution and also on DOMContentLoaded to guarantee rendering
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            renderCheckboxes(roster);
+            updateCount();
+        });
+    } else {
+        renderCheckboxes(roster);
+        updateCount();
+    }
 </script>
 </body>
 </html>
