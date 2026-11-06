@@ -67,4 +67,255 @@
             <p style="font-size: 0.75rem; color: var(--text-light); margin-bottom: 8px;">Changes update active sessions and provide updated code snippets for GitHub.</p>
             <div id="roster-editor" style="margin-top: 10px; max-height: 200px; overflow-y: auto;"></div>
             <div style="margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px;">
-                <input type="text" id="new-
+                <input type="text" id="new-name" placeholder="New Player Name">
+                <div class="row">
+                    <input type="number" id="new-bat" placeholder="Batting (1-10)" min="1" max="10" step="0.5">
+                    <input type="number" id="new-bowl" placeholder="Bowling (1-10)" min="1" max="10" step="0.5">
+                </div>
+                <button onclick="addPlayer()">Add Player</button>
+            </div>
+            <button class="secondary" onclick="exportCode()" style="margin-top: 8px;">📥 Copy Updated Code Array</button>
+        </div>
+
+        <!-- Search & Checklist -->
+        <input type="text" id="search-box" placeholder="Search players..." oninput="filterPlayers()" style="margin-bottom: 8px;">
+        <div class="player-grid" id="player-checkboxes"></div>
+        <div class="actions-row">
+            <button class="secondary" onclick="selectAll(true)">Select All</button>
+            <button class="secondary" onclick="selectAll(false)">Clear All</button>
+        </div>
+    </div>
+
+    <!-- Generator Controls -->
+    <div class="section">
+        <label style="font-size: 0.9rem; font-weight: 600;">Number of Teams:</label>
+        <input type="number" id="num-teams" value="2" min="2" max="4" style="margin-top: 4px;">
+        <button onclick="generateTeams()" style="margin-top: 8px;">⚡ Auto-Balance Teams</button>
+    </div>
+
+    <!-- Output Teams -->
+    <div class="section" id="results-section" style="display:none;">
+        <h2>Generated Weekend Teams</h2>
+        <div class="teams-container" id="teams-output"></div>
+        <button class="secondary" onclick="shareTeams()" style="margin-top: 12px;">📋 Copy Teams to WhatsApp</button>
+    </div>
+</div>
+
+<script>
+    // HARDCODED MASTER ROSTER & WEIGHTAGES
+    const defaultRoster = [
+        {name: "Arun", bat: 9, bowl: 8.5},
+        {name: "Dilip", bat: 8.5, bowl: 9},
+        {name: "Dinesh", bat: 8, bowl: 9},
+        {name: "Gopi", bat: 9, bowl: 8.5},
+        {name: "Karthi Laila", bat: 7.5, bowl: 6},
+        {name: "Karthi Das", bat: 9, bowl: 8.5},
+        {name: "Kathir", bat: 9, bowl: 8.5},
+        {name: "Kavin", bat: 9, bowl: 8.5},
+        {name: "Mahesh", bat: 8, bowl: 8.5},
+        {name: "Manoj", bat: 7.5, bowl: 8},
+        {name: "Naveen Kumar", bat: 9, bowl: 8.5},
+        {name: "Naveen Neduvai", bat: 8.5, bowl: 9},
+        {name: "Periya Bharathi", bat: 8, bowl: 5},
+        {name: "Rahul", bat: 7.5, bowl: 7.5},
+        {name: "Rithan", bat: 8, bowl: 4},
+        {name: "Rithish", bat: 9, bowl: 8.5},
+        {name: "Sathish", bat: 7.5, bowl: 7.5},
+        {name: "Selva", bat: 7.5, bowl: 8.5},
+        {name: "Siva", bat: 9, bowl: 8.5},
+        {name: "Tamil", bat: 9, bowl: 8.5}
+    ];
+
+    let roster = [];
+    try {
+        let saved = localStorage.getItem('cric_roster_v2');
+        if (saved) {
+            let parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                roster = parsed;
+            } else {
+                roster = [...defaultRoster];
+            }
+        } else {
+            roster = [...defaultRoster];
+        }
+    } catch(e) {
+        roster = [...defaultRoster];
+    }
+
+    function saveRoster() {
+        localStorage.setItem('cric_roster_v2', JSON.stringify(roster));
+    }
+
+    function init() {
+        renderCheckboxes(roster);
+        updateCount();
+    }
+
+    function renderCheckboxes(listToRender) {
+        const grid = document.getElementById('player-checkboxes');
+        if (!grid) return;
+        grid.innerHTML = '';
+        listToRender.forEach((p) => {
+            const originalIndex = roster.findIndex(item => item.name === p.name);
+            grid.innerHTML += `
+                <label class="player-chip">
+                    <input type="checkbox" value="${originalIndex}" onchange="updateCount()">
+                    ${p.name}
+                </label>`;
+        });
+    }
+
+    function filterPlayers() {
+        const query = document.getElementById('search-box').value.toLowerCase();
+        const filtered = roster.filter(p => p.name.toLowerCase().includes(query));
+        renderCheckboxes(filtered);
+    }
+
+    function updateCount() {
+        const checked = document.querySelectorAll('.player-chip input:checked');
+        const countElem = document.getElementById('selected-count');
+        if (countElem) countElem.innerText = checked.length;
+    }
+
+    function selectAll(status) {
+        document.querySelectorAll('.player-chip input').forEach(cb => cb.checked = status);
+        updateCount();
+    }
+
+    function toggleAdmin(e) {
+        e.preventDefault();
+        const login = document.getElementById('admin-login');
+        login.style.display = login.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function verifyPin() {
+        const pin = document.getElementById('admin-pin').value;
+        if (pin === '5467') {
+            document.getElementById('admin-login').style.display = 'none';
+            document.getElementById('admin-settings').style.display = 'block';
+            renderEditor();
+        } else {
+            alert('Incorrect PIN');
+        }
+    }
+
+    function renderEditor() {
+        const editor = document.getElementById('roster-editor');
+        if (!editor) return;
+        editor.innerHTML = '';
+        roster.forEach((p, i) => {
+            editor.innerHTML += `
+                <div style="display:flex; gap:6px; margin-bottom:6px; align-items:center;">
+                    <span style="flex:2; font-size:0.85rem; font-weight:600;">${p.name}</span>
+                    <input type="number" value="${p.bat}" min="1" max="10" step="0.5" title="Batting" style="width:55px; margin:0;" onchange="updatePlayerStat(${i}, 'bat', this.value)">
+                    <input type="number" value="${p.bowl}" min="1" max="10" step="0.5" title="Bowling" style="width:55px; margin:0;" onchange="updatePlayerStat(${i}, 'bowl', this.value)">
+                    <button onclick="removePlayer(${i})" style="width:32px; background:var(--danger); padding:4px; color:#fff;">×</button>
+                </div>`;
+        });
+    }
+
+    function updatePlayerStat(index, field, val) {
+        roster[index][field] = parseFloat(val) || 0;
+        saveRoster();
+    }
+
+    function addPlayer() {
+        const name = document.getElementById('new-name').value.trim();
+        const bat = parseFloat(document.getElementById('new-bat').value) || 5;
+        const bowl = parseFloat(document.getElementById('new-bowl').value) || 5;
+        if(name) {
+            roster.push({name, bat, bowl});
+            saveRoster();
+            document.getElementById('new-name').value = '';
+            document.getElementById('new-bat').value = '';
+            document.getElementById('new-bowl').value = '';
+            init();
+            renderEditor();
+        }
+    }
+
+    function removePlayer(index) {
+        roster.splice(index, 1);
+        saveRoster();
+        init();
+        renderEditor();
+    }
+
+    function exportCode() {
+        let codeSnippet = "const defaultRoster = [\n" + roster.map(p => `    {name: "${p.name}", bat: ${p.bat}, bowl: ${p.bowl}}`).join(",\n") + "\n];";
+        navigator.clipboard.writeText(codeSnippet).then(() => {
+            alert('Roster array copied to clipboard! You can paste this directly into your GitHub index.html file.');
+        });
+    }
+
+    function generateTeams() {
+        const checkedInputs = document.querySelectorAll('.player-chip input:checked');
+        if (checkedInputs.length < 2) {
+            alert('Please select at least 2 players for this weekend.');
+            return;
+        }
+
+        let selectedPlayers = Array.from(checkedInputs).map(input => {
+            let p = roster[input.value];
+            return {
+                ...p,
+                totalScore: p.bat + p.bowl
+            };
+        });
+
+        selectedPlayers.sort((a, b) => b.totalScore - a.totalScore);
+
+        const numTeams = parseInt(document.getElementById('num-teams').value) || 2;
+        let teams = Array.from({length: numTeams}, () => ({ players: [] }));
+
+        let turn = 0;
+        let goingDown = true;
+        selectedPlayers.forEach(player => {
+            teams[turn].players.push(player);
+
+            if (goingDown) {
+                turn++;
+                if (turn >= numTeams) {
+                    turn = numTeams - 1;
+                    goingDown = false;
+                }
+            } else {
+                turn--;
+                if (turn < 0) {
+                    turn = 0;
+                    goingDown = true;
+                }
+            }
+        });
+
+        renderTeams(teams);
+    }
+
+    function renderTeams(teams) {
+        const container = document.getElementById('teams-output');
+        if (!container) return;
+        container.innerHTML = '';
+        teams.forEach((t, index) => {
+            let list = t.players.map(p => `<li>${p.name}</li>`).join('');
+            container.innerHTML += `
+                <div class="team-card">
+                    <div class="team-title">Team ${index + 1} (${t.players.length} Players)</div>
+                    <ul>${list}</ul>
+                </div>`;
+        });
+        document.getElementById('results-section').style.display = 'block';
+    }
+
+    function shareTeams() {
+        let text = "🏏 *Weekend Cricket Teams*\n\n";
+        document.querySelectorAll('.team-card').forEach(card => {
+            text += card.innerText + "\n\n";
+        });
+        navigator.clipboard.writeText(text).then(() => alert('Teams copied to clipboard! Ready to paste into WhatsApp.'));
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
